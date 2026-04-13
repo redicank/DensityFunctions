@@ -226,7 +226,7 @@ let buildStep = 7;
 
 const ptFill = '#185FA5';
 const ptStroke = '#0C447C';
-const gridColor = 'rgba(0,0,0,0.04)';
+const gridColor = 'rgba(0,0,0,0.15)';
 const circleStroke = 'rgba(0,0,0,0.35)';
 const kernelFill = 'rgba(24,95,165,0.1)';
 
@@ -271,12 +271,14 @@ function drawPoints(ctx, w, h, pts) {
   });
 }
 
-function drawGrid(ctx, w, h) {
+function drawCellBorders(ctx, w, h, res) {
   ctx.strokeStyle = gridColor;
   ctx.lineWidth = 0.5;
-  for (let i = 0; i <= 10; i++) {
-    ctx.beginPath(); ctx.moveTo(i * w / 10, 0); ctx.lineTo(i * w / 10, h); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i * h / 10); ctx.lineTo(w, i * h / 10); ctx.stroke();
+  for (let x = 0; x <= w; x += res) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y <= h; y += res) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
 }
 
@@ -322,7 +324,7 @@ function drawPointDensity(canvas) {
   ctx.fillStyle = '#f8f7f4';
   ctx.fillRect(0, 0, w, h);
 
-  const res = 4;
+  const res = 12;
   const {cells, maxD} = computePointDensity(w, h, res);
 
   cells.forEach(cell => {
@@ -331,7 +333,7 @@ function drawPointDensity(canvas) {
     ctx.fillRect(cell.x, cell.y, res, res);
   });
 
-  drawGrid(ctx, w, h);
+  drawCellBorders(ctx, w, h, res);
   drawPoints(ctx, w, h, points);
 
   const probe = {x: 0.28, y: 0.48};
@@ -366,7 +368,7 @@ function drawKernelDensity(canvas, maxPts) {
   ctx.fillRect(0, 0, w, h);
 
   const usePts = maxPts !== undefined ? points.slice(0, maxPts) : points;
-  const res = 4;
+  const res = 12;
   const {cells, maxVal} = computeKernelDensity(w, h, res, usePts);
 
   cells.forEach(cell => {
@@ -375,7 +377,7 @@ function drawKernelDensity(canvas, maxPts) {
     ctx.fillRect(cell.x, cell.y, res, res);
   });
 
-  drawGrid(ctx, w, h);
+  drawCellBorders(ctx, w, h, res);
   drawPoints(ctx, w, h, usePts);
 
   if (maxPts !== undefined && maxPts <= 3) {
