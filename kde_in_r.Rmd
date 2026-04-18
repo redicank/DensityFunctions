@@ -1,0 +1,152 @@
+---
+title: "Kernel Density Estimation in R"
+subtitle: "What ArcGIS Pro Hides From You"
+author: "Kyle J. Redican, PhD"
+date: "April 2026"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: show
+    fig_width: 8
+    fig_height: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Setup and Data
+
+Load libraries and read in the Gainesville traffic accident data.
+
+```{r load-data}
+library(spatstat)
+library(sf)
+
+# Working Directory
+setwd("C:/Users/kredican/Desktop/FloridaInterviewMaterials/KernelDensityMapping/Rcode")
+
+# Load shapefiles
+boundary <- st_read("GainesvilleBoundary.shp", quiet = TRUE)
+accidents <- st_read("Trafficaccidents2025.shp", quiet = TRUE)
+
+# Convert to spatstat point pattern object
+win <- as.owin(boundary)
+coords <- st_coordinates(accidents)
+pp <- ppp(coords[,1], coords[,2], window = win)
+```
+
+```{r quick-look, fig.cap="Raw point pattern: 2025 Traffic Accidents in Gainesville, FL"}
+plot(pp, main = "2025 Traffic Accidents, Gainesville FL", pch = 16, cex = 0.4)
+```
+
+---
+
+## KDE With Full Control
+
+In ArcGIS Pro, the Kernel Density tool makes two decisions for you:
+
+- **Kernel function:** Quartic (locked, cannot change)
+- **Bandwidth:** Silverman's rule of thumb (or manual entry)
+
+In R, both are yours to choose.
+
+```{r kde-basic, fig.cap="KDE with Gaussian kernel and cross-validated bandwidth"}
+kde_result <- density(pp,
+  kernel = "gaussian",
+  sigma  = bw.ppl(pp),
+  dimyx  = c(256, 256))
+
+plot(kde_result, main = "KDE: Gaussian Kernel, Cross-Validated Bandwidth")
+plot(pp, add = TRUE, pch = 16, cex = 0.3, col = "black")
+```
+
+---
+
+## Bandwidth: The Most Important Parameter
+
+Three different methods, three different answers. All are defensible. ArcGIS Pro only gives you one.
+
+```{r bandwidth-comparison}
+bw_scott <- mean(bw.scott(pp))
+bw_cv        <- bw.ppl(pp)
+bw_diggle    <- bw.diggle(pp)
+
+
+bw_table <- data.frame(
+  Method = c("Scott's Rule (normal reference)",
+             "Likelihood Cross-Validation",
+             "Diggle's Method"),
+  Bandwidth_m = round(c(bw_scott, bw_cv, bw_diggle), 1),
+  Notes = c("Fast, assumes unimodal distribution",
+            "Data-driven, minimizes prediction error",
+            "Minimizes mean squared error")
+)
+
+knitr::kable(bw_table, col.names = c("Method", "Bandwidth (m)", "Notes"),
+             caption = "Bandwidth Selection: Same Data, Different Answers")
+```
+
+### Visual Comparison
+
+```{r bandwidth-maps, fig.width=10, fig.height=4, fig.cap="Same kernel (Gaussian), three different bandwidths"}
+par(mfrow = c(1, 3), mar = c(2, 2, 3, 1))
+
+kde_scott <- density(pp, kernel = "gaussian", sigma = bw_scott, dimyx = c(256, 256))
+kde_cv   <- density(pp, kernel = "gaussian", sigma = bw_cv, dimyx = c(256, 256))
+kde_dig  <- density(pp, kernel = "gaussian", sigma = bw_diggle, dimyx = c(256, 256))
+
+plot(kde_scott, main = paste0("Scott (", round(bw_scott, 0), "m)"))
+plot(kde_cv,   main = paste0("Cross-Validation (", round(bw_cv, 0), "m)"))
+plot(kde_dig,  main = paste0("Diggle (", round(bw_diggle, 0), "m)"))
+```
+
+**Key takeaway:** The bandwidth you choose changes your conclusions. If your results shift dramatically with small bandwidth changes, your data may not support the analysis at that scale.
+
+---
+
+## Kernel Shape: It Matters Less Than You Think
+
+ArcGIS Pro locks you to the quartic kernel. R lets you compare. Here are four kernel functions applied to the same data with the same bandwidth.
+
+```{r kernel-comparison, fig.width=10, fig.height=8, fig.cap="Same bandwidth (cross-validated), four different kernel functions"}
+par(mfrow = c(2, 2), mar = c(2, 2, 3, 1))
+
+kde_gauss <- density(pp, kernel = "gaussian",      sigma = bw_cv, dimyx = c(256, 256))
+kde_epan  <- density(pp, kernel = "epanechnikov",   sigma = bw_cv, dimyx = c(256, 256))
+kde_quart <- density(pp, kernel = "quartic",        sigma = bw_cv, dimyx = c(256, 256))
+kde_disc  <- density(pp, kernel = "disc",           sigma = bw_cv, dimyx = c(256, 256))
+
+plot(kde_gauss, main = "Gaussian")
+plot(kde_epan,  main = "Epanechnikov")
+plot(kde_quart, main = "Quartic (Pro default)")
+plot(kde_disc,  main = "Disc")
+```
+
+Notice how similar the outputs are. The kernel shape produces subtle differences. The bandwidth produces dramatic ones. This is why bandwidth selection matters more than kernel choice.
+
+---
+
+## What Pro Gives You vs. What R Gives You
+
+| | ArcGIS Pro | R (spatstat) |
+|---|---|---|
+| **Kernel function** | Quartic (locked) | Gaussian, Epanechnikov, Quartic, Disc |
+| **Bandwidth selection** | Silverman or manual | Silverman, Cross-Validation, Diggle, manual |
+| **Compare methods** | Run tool multiple times | Side-by-side in one script |
+| **Reproducibility** | Screenshot the dialog | Share the .Rmd file |
+| **Transparency** | Parameters hidden in tool | Every decision visible in code |
+
+---
+
+## The Bottom Line
+
+Pro is a great tool for applied GIS work. But when you need to **defend your analytical choices**, understand what the tool is doing, or compare methods systematically, you need to move beyond the GUI.
+
+Every decision in this document is visible, reproducible, and yours.
+
+---
+
+*Built with R Markdown. Source code and data available on [GitHub](https://github.com/redicank/DensityFunctions).*
